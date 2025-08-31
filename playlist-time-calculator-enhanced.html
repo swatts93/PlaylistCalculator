@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Playlist Time Calculator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #dbeafe 0%, #f3e8ff 100%);
+        }
+        
+        .song-entry {
+            transition: all 0.2s ease-in-out;
+        }
+        
+        .song-entry:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        
+        .modal-backdrop {
+            backdrop-filter: blur(4px);
+        }
+        
+        .import-textarea {
+            font-family: 'Courier New', monospace;
+        }
+        
+        .result-card {
+            transition: all 0.2s ease-in-out;
+        }
+        
+        .result-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body class="gradient-bg min-h-screen">
+    <div class="max-w-6xl mx-auto p-6">
+        <!-- Header -->
+        <h1 class="text-3xl font-bold text-center mb-8 text-gray-800 flex items-center justify-center gap-2">
+            <i data-lucide="clock" class="text-blue-600"></i>
+            Playlist Time Calculator
+        </h1>
+
+        <div class="grid lg:grid-cols-2 gap-6">
+            <!-- Input Section -->
+            <div class="space-y-6">
+                <!-- Spotify Integration -->
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h2 class="text-xl font-semibold text-gray-700 flex items-center gap-2 mb-4">
+                        <i data-lucide="music" class="text-green-500"></i>
+                        Import from Spotify
+                    </h2>
+                    
+                    <div id="spotifyAuth" class="space-y-4">
+                        <div class="p-3 bg-green-50 rounded-lg text-sm text-green-800">
+                            <div class="flex items-start gap-2">
+                                <i data-lucide="external-link" class="mt-0.5 flex-shrink-0" size="16"></i>
+                                <div>
+                                    <strong>Quick Import:</strong> Export your playlist using 
+                                    <a href="https://www.chosic.com/spotify-playlist-exporter/" target="_blank" class="text-green-600 hover:underline font-medium">Chosic.com</a> 
+                                    (no login required) or connect directly below!
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Spotify Client ID:</label>
+                            <input 
+                                type="text" 
+                                id="clientId" 
+                                placeholder="Enter your Spotify Client ID"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                            >
+                            <small class="text-gray-500 text-xs mt-1 block">
+                                Get this from <a href="https://developer.spotify.com/dashboard" target="_blank" class="text-blue-600 hover:underline">Spotify Developer Dashboard</a>
+                            </small>
+                        </div>
+                        
+                        <div class="flex gap-2">
+                            <button 
+                                onclick="connectSpotify()" 
+                                class="flex-1 bg-green-500 hover:bg-green-600 text-white font-medium py-2 px-4 rounded-md transition-colors flex items-center justify-center gap-2"
+                            >
+                                <i data-lucide="link" size="16"></i>
+                                Connect to Spotify
+                            </button>
+                            <button 
+                                onclick="showImportModal()" 
+                                class="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-md transition-colors flex items-center gap-2"
+                            >
+                                <i data-lucide="upload" size="16"></i>
+                                Paste Data
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="spotifyConnected" style="display:none;" class="space-y-4">
+                        <div class="flex items-center gap-2 text-green-600">
+                            <i data-lucide="check-circle" size="20"></i>
+                            <span class="font-medium">Connected to Spotify</span>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Select Playlist:</label>
+                            <select 
+                                id="playlistSelect" 
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                            >
+                                <option value="">Loading playlists...</option>
+                            </select>
+                        </div>
+                        
+                        <div class="flex gap-2">
+                            <button 
+                                onclick="importPlaylist()" 
+                                class="flex-1 bg-green-500 hover:bg-green-600 text-white font-medium py-2 px-4 rounded-md transition-colors flex items-center justify-center gap-2"
+                            >
+                                <i data-lucide="download" size="16"></i>
+                                Import Selected Playlist
+                            </button>
+                            <button 
+                                onclick="disconnectSpotify()" 
+                                class="bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-md transition-colors"
+                            >
+                                Disconnect
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="spotifyResult" class="mt-4 p-3 rounded-md" style="display:none;"></div>
+                </div>
+
+                <!-- Songs & Durations -->
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-xl font-semibold text-gray-700 flex items-center gap-2">
+                            <i data-lucide="plus" class="text-green-600"></i>
+                            Songs & Durations
+                        </h2>
+                        <button
+                            onclick="addSongEntry()"
+                            class="px-3 py-1 text-sm bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors flex items-center gap-1"
+                        >
+                            <i data-lucide="plus" size="14"></i>
+                            Add Song
+                        </button>
+                    </div>
+
+                    <div id="songList" class="space-y-2 mb-4">
+                        <!-- Songs will be populated here -->
+                    </div>
+
+                    <button 
+                        onclick="calculateTotalTime()" 
+                        class="w-full py-3 px-4 bg-blue-500 text-white font-medium rounded-md hover:bg-blue-600 transition-colors flex items-center justify-center gap-2"
+                    >
+                        <i data-lucide="calculator" size="16"></i>
+                        Calculate Total Time
+                    </button>
+
+                    <div id="totalTimeResult" class="mt-4 p-3 rounded-md" style="display:none;"></div>
+                </div>
+
+                <!-- Time Settings -->
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h2 class="text-xl font-semibold text-gray-700 flex items-center gap-2 mb-4">
+                        <i data-lucide="settings" class="text-blue-600"></i>
+                        Time Settings
+                    </h2>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Start Time (optional)
+                            </label>
+                            <input
+                                type="time"
+                                id="startTime"
+                                step="1"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            >
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Target End Time
+                            </label>
+                            <input
+                                type="time"
+                                id="targetEndTime"
+                                step="1"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                onchange="updateResults()"
+                            >
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results Section -->
+            <div class="space-y-6">
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-700 flex items-center gap-2">
+                        <i data-lucide="calculator" class="text-blue-600"></i>
+                        Results
+                    </h2>
+
+                    <div class="space-y-4">
+                        <!-- Total Duration -->
+                        <div class="result-card p-4 bg-blue-50 rounded-lg border border-blue-200">
+                            <h3 class="font-semibold text-blue-800 mb-2 flex items-center gap-2">
+                                <i data-lucide="clock" size="16"></i>
+                                Total Playlist Duration
+                            </h3>
+                            <p id="totalDurationDisplay" class="text-2xl font-bold text-blue-600">0:00</p>
+                        </div>
+
+                        <!-- End Time -->
+                        <div class="result-card p-4 bg-green-50 rounded-lg border border-green-200">
+                            <h3 class="font-semibold text-green-800 mb-2 flex items-center gap-2">
+                                <i data-lucide="calendar-clock" size="16"></i>
+                                Will End At
+                            </h3>
+                            <p id="endTimeDisplay" class="text-lg text-green-700">--:--</p>
+                            <p id="endTimeContext" class="text-sm text-green-600">From now</p>
+                        </div>
+
+                        <!-- Time Until Target -->
+                        <div id="timeUntilCard" class="result-card p-4 bg-purple-50 rounded-lg border border-purple-200" style="display:none;">
+                            <h3 class="font-semibold text-purple-800 mb-2 flex items-center gap-2">
+                                <i data-lucide="timer" size="16"></i>
+                                Time Until Target
+                            </h3>
+                            <p id="timeUntilDisplay" class="text-lg text-purple-700">--:--</p>
+                        </div>
+
+                        <!-- Playlist vs Target -->
+                        <div id="comparisonCard" class="result-card p-4 rounded-lg border" style="display:none;">
+                            <h3 class="font-semibold mb-2 flex items-center gap-2">
+                                <i data-lucide="target" size="16"></i>
+                                Playlist vs Target Time
+                            </h3>
+                            <p id="comparisonText" class="text-lg"></p>
+                            <p id="comparisonAdvice" class="text-sm mt-1"></p>
+                        </div>
+
+                        <!-- Quick Stats -->
+                        <div id="quickStats" class="result-card p-4 bg-gray-50 rounded-lg border border-gray-200">
+                            <h3 class="font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                                <i data-lucide="bar-chart-3" size="16"></i>
+                                Quick Stats
+                            </h3>
+                            <div class="text-sm text-gray-600 space-y-1">
+                                <p id="songCountDisplay">Total songs: 0 | Selected: 0</p>
+                                <p id="avgLengthDisplay">Average song length: 0:00</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import Modal -->
+    <div id="importModal" class="fixed inset-0 bg-black bg-opacity-50 modal-backdrop flex items-center justify-center z-50 p-4" style="display:none;">
+        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
+            <div class="p-6 border-b">
+                <h3 class="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                    <i data-lucide="upload" size="20"></i>
+                    Import Playlist Data
+                </h3>
+                <p class="text-sm text-gray-600 mt-1">Paste your exported playlist data below</p>
+            </div>
+            
+            <div class="p-6">
+                <div class="mb-4">
+                    <h4 class="font-medium text-gray-700 mb-2">How to get your Spotify playlist data:</h4>
+                    <div class="text-sm text-gray-600 space-y-2">
+                        <p><strong>Method 1:</strong> Visit <a href="https://www.chosic.com/spotify-playlist-exporter/" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">Chosic.com</a> - No login required!</p>
+                        <p><strong>Method 2:</strong> Use <a href="https://exportify.net/" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">Exportify.net</a> - Export to CSV</p>
+                        <p><strong>Method 3:</strong> Copy manually from Spotify (format: "Song Name - Artist MM:SS")</p>
+                    </div>
+                </div>
+                
+                <textarea
+                    id="importText"
+                    placeholder="Paste your playlist data here...&#10;&#10;Supported formats:&#10;- CSV: Song Name, Artist, Duration&#10;- Text: Song Name - Artist MM:SS&#10;- Tab-separated data&#10;&#10;Example:&#10;Bohemian Rhapsody, Queen, 5:55&#10;Hotel California, Eagles, 6:30"
+                    class="w-full h-64 p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm import-textarea"
+                ></textarea>
+            </div>
+            
+            <div class="p-6 border-t flex justify-end gap-3">
+                <button
+                    onclick="hideImportModal()"
+                    class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
+                >
+                    Cancel
+                </button>
+                <button
+                    onclick="handleImport()"
+                    class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
+                >
+                    Import Songs
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tip -->
+    <div class="mt-6 text-center text-sm text-gray-500">
+        <p class="flex items-center justify-center gap-1">
+            <i data-lucide="lightbulb" size="16"></i>
+            Tip: Enter song durations in MM:SS format (e.g., 3:45) or HH:MM:SS for longer tracks
+        </p>
+    </div>
+
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+        
+        // Global variables
+        let songs = [];
+        let songIdCounter = 1;
+        let spotifyAccessToken = null;
+        let spotifyPlaylists = [];
+        
+        // Spotify configuration
+        const SPOTIFY_SCOPES = 'playlist-read-private playlist-read-collaborative';
+        const REDIRECT_URI = window.location.href.split('?')[0];
+        
+        // Initialize with one empty song
+        document.addEventListener('DOMContentLoaded', function() {
+            addSongEntry();
+            updateResults();
+            
+            // Check if returning from Spotify auth
+            const urlParams = new URLSearchParams(window.location.search);
+            const code = urlParams.get('code');
+            const error = urlParams.get('error');
+            
+            if (error) {
+                showSpotifyError('Authorization failed: ' + error);
+                window.history.replaceState({}, document.title, window.location.pathname);
+            } else if (code) {
+                exchangeCodeForToken(code);
+            }
+        });
+        
+        // Parse time string into seconds
+        function parseTimeToSeconds(timeStr) {
+            if (!timeStr || timeStr.trim() === '') return 0;
+            
+            const parts = timeStr.trim().split(':').map(part => parseInt(part) || 0);
+            
+            if (parts.length === 2) {
+                return parts[0] * 60 + parts[1];
+            } else if (parts.length === 3) {
+                return parts[0] * 3600 + parts[1] * 60 + parts[2];
+            } else {
+                throw new Error('Invalid time format. Use mm:ss or h:mm:ss');
+            }
+        }
+        
+        // Convert seconds back to time string
+        function secondsToTimeString(seconds) {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = seconds % 60;
+            
+            if (hours > 0) {
+                return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            } else {
+                return `${minutes}:${secs.toString().padStart(2, '0')}`;
+            }
+        }
+        
+        // Add new song entry
+        function addSongEntry(duration = '', name = '', artist = '', selected = true) {
+            const songId = songIdCounter++;
+            const song = { id: songId, duration, name, artist, selected };
+            songs.push(song);
+            
+            const songList = document.getElementById('songList');
+            const songDiv = document.createElement('div');
+            songDiv.className = `song-entry flex items-center gap-2 p-3 rounded-lg border ${selected ? 'bg-white border-gray-200' : 'bg-gray-50 border-gray-100'}`;
+            songDiv.id = `song-${songId}`;
+            
+            songDiv.innerHTML = `
+                <input
+                    type="checkbox"
+                    ${selected ? 'checked' : ''}
+                    onchange="toggleSongSelection(${songId})"
+                    class="w-4 h-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                >
+                <span class="text-sm text-gray-500 w-8">#${songs.length}</span>
+                <div class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-2">
+                    <input
+                        type="text"
+                        placeholder="Song name"
+                        value="${name}"
+                        onchange="updateSong(${songId}, 'name', this.value)"
+                        class="px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 ${!selected ? 'bg-gray-100' : ''}"
+                        ${!selected ? 'disabled' : ''}
+                    >
+                    <input
+                        type="text"
+                        placeholder="Artist"
+                        value="${artist}"
+                        onchange="updateSong(${songId}, 'artist', this.value)"
+                        class="px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 ${!selected ? 'bg-gray-100' : ''}"
+                        ${!selected ? 'disabled' : ''}
+                    >
+                    <input
+                        type="text"
+                        placeholder="MM:SS"
+                        value="${duration}"
+                        onchange="updateSong(${songId}, 'duration', this.value); updateResults();"
+                        class="px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 ${!selected ? 'bg-gray-100' : ''}"
+                        ${!selected ? 'disabled' : ''}
+                    >
+                </div>
+                ${songs.length > 1 ? `
+                    <button
+                        onclick="removeSong(${songId})"
+                        class="p-1 text-red-500 hover:bg-red-50 rounded transition-colors"
+                    >
+                        <i data-lucide="minus" size="14"></i>
+                    </button>
+                ` : ''}
+            `;
+            
+            songList.appendChild(songDiv);
+            lucide.createIcons();
+            updateResults();
+        }
+        
+        // Remove song entry
+        function removeSong(id) {
+            songs = songs.filter(song => song.id !== id);
+            document.getElementById(`song-${id}`).remove();
+            updateSongNumbers();
+            updateResults();
+        }
+        
+        // Update song data
+        function updateSong(id, field, value) {
+            const song = songs.find(s => s.id === id);
+            if (song) {
+                song[field] = value;
+                updateResults();
+            }
+        }
+        
+        // Toggle song selection
+        function toggleSongSelection(id) {
+            const song = songs.find(s => s.id === id);
+            if (song) {
+                song.selected = !song.selected;
+                const songDiv = document.getElementById(`song-${id}`);
+                const inputs = songDiv.querySelectorAll('input[type="text"]');
+                
+                if (song.selected) {
+                    songDiv.className = songDiv.className.replace('bg-gray-50 border-gray-100', 'bg-white border-gray-200');
+                    inputs.forEach(input => {
+                        input.disabled = false;
+                        input.className = input.className.replace('bg-gray-100', '');
+                    });
+                } else {
+                    songDiv.className = songDiv.className.replace('bg-white border-gray-200', 'bg-gray-50 border-gray-100');
+                    inputs.forEach(input => {
+                        input.disabled = true;
+                        input.className += ' bg-gray-100';
+                    });
+                }
+                updateResults();
+            }
+        }
+        
+        // Update song numbers
+        function updateSongNumbers() {
+            songs.forEach((song, index) => {
+                const songDiv = document.getElementById(`song-${song.id}`);
+                const numberSpan = songDiv.querySelector('span');
+                numberSpan.textContent = `#${index + 1}`;
+            });
+        }
+        
+        // Calculate total time and update displays
+        function calculateTotalTime() {
+            updateResults();
+            const result = document.getElementById('totalTimeResult');
+            const totalSeconds = songs.reduce((sum, song) => {
+                return song.selected ? sum + parseTimeToSeconds(song.duration) : sum;
+            }, 0);
+            
+            if (totalSeconds > 0) {
+                result.innerHTML = `
+                    <div class="flex items-center gap-2 text-green-600">
+                        <i data-lucide="check-circle" size="16"></i>
+                        <span class="font-medium">Total calculated: ${secondsToTimeString(totalSeconds)}</span>
+                    </div>
+                `;
+                result.className = 'bg-green-50 text-green-800 border border-green-200 p-3 rounded-md';
+                result.style.display = 'block';
+                lucide.createIcons();
+            } else {
+                result.style.display = 'none';
+            }
+        }
+        
+        // Update all results
+        function updateResults() {
+            const selectedSongs = songs.filter(song => song.selected);
+            const totalSeconds = selectedSongs.reduce((sum, song) => sum + parseTimeToSeconds(song.duration), 0);
+            const songsWithDuration = selectedSongs.filter(song => song.duration);
+            
+            // Update total duration
+            document.getElementById('totalDurationDisplay').textContent = secondsToTimeString(totalSeconds);
+            
+            // Update end time
+            const startTime = document.getElementById('startTime').value;
+            const targetEndTime = document.getElementById('targetEndTime').value;
+            
+            if (startTime) {
+                const endTime = addTimeToStart(startTime, totalSeconds);
+                document.getElementById('endTimeDisplay').textContent = endTime;
+                document.getElementById('endTimeContext').textContent = 'From start time';
+            } else {
+                const endTime = addTimeToNow(totalSeconds);
+                document.getElementById('endTimeDisplay').textContent = endTime;
+                document.getElementById('endTimeContext').textContent = 'From now';
+            }
+            
+            // Update target time calculations
+            if (targetEndTime) {
+                const currentTime = new Date();
+                const targetTime = new Date();
+                const [targetHours, targetMinutes] = targetEndTime.split(':').map(Number);
+                targetTime.setHours(targetHours, targetMinutes, 0, 0);
+                
+                if (targetTime < currentTime) {
+                    targetTime.setDate(targetTime.getDate() + 1);
+                }
+                
+                const timeUntilTargetSeconds = Math.floor((targetTime - currentTime) / 1000);
+                const difference = timeUntilTargetSeconds - totalSeconds;
+                
+                // Show time until target
+                document.getElementById('timeUntilCard').style.display = 'block';
+                document.getElementById('timeUntilDisplay').textContent = secondsToTimeString(timeUntilTargetSeconds);
+                
+                // Show comparison
+                const comparisonCard = document.getElementById('comparisonCard');
+                const comparisonText = document.getElementById('comparisonText');
+                const comparisonAdvice = document.getElementById('comparisonAdvice');
+                
+                comparisonCard.style.display = 'block';
+                
+                if (difference < 0) {
+                    comparisonCard.className = 'result-card p-4 rounded-lg border bg-red-50 border-red-200';
+                    comparisonText.className = 'text-lg text-red-700';
+                    comparisonAdvice.className = 'text-sm mt-1 text-red-600';
+                    comparisonText.textContent = `Playlist is too long by: ${secondsToTimeString(Math.abs(difference))}`;
+                    comparisonAdvice.textContent = 'Remove songs or shorten playlist';
+                } else if (difference > 0) {
+                    comparisonCard.className = 'result-card p-4 rounded-lg border bg-yellow-50 border-yellow-200';
+                    comparisonText.className = 'text-lg text-yellow-700';
+                    comparisonAdvice.className = 'text-sm mt-1 text-yellow-600';
+                    comparisonText.textContent = `You have extra time: ${secondsToTimeString(difference)}`;
+                    comparisonAdvice.textContent = 'You can add more songs';
+                } else {
+                    comparisonCard.className = 'result-card p-4 rounded-lg border bg-green-50 border-green-200';
+                    comparisonText.className = 'text-lg text-green-700';
+                    comparisonAdvice.className = 'text-sm mt-1 text-green-600';
+                    comparisonText.textContent = 'Perfect timing!';
+                    comparisonAdvice.textContent = 'Playlist matches target time exactly';
+                }
+            } else {
+                document.getElementById('timeUntilCard').style.display = 'none';
+                document.getElementById('comparisonCard').style.display = 'none';
+            }
+            
+            // Update quick stats
+            document.getElementById('songCountDisplay').textContent = `Total songs: ${songs.length} | Selected: ${selectedSongs.length}`;
+            
+            const avgLength = songsWithDuration.length > 0 ? 
+                Math.floor(songsWithDuration.reduce((sum, song) => sum + parseTimeToSeconds(song.duration), 0) / songsWithDuration.length) : 0;
+            document.getElementById('avgLengthDisplay').textContent = `Average song length: ${secondsToTimeString(avgLength)}`;
+        }
+        
+        // Add time to current time
+        function addTimeToNow(seconds) {
+            const now = new Date();
+            const future = new Date(now.getTime() + seconds * 1000);
+            return future.toLocaleTimeString();
+        }
+        
+        // Add time to specific start time
+        function addTimeToStart(startTimeStr, seconds) {
+            if (!startTimeStr) return '';
+            const [hours, minutes] = startTimeStr.split(':').map(Number);
+            const startDate = new Date();
+            startDate.setHours(hours, minutes, 0, 0);
+            const endDate = new Date(startDate.getTime() + seconds * 1000);
+            return endDate.toLocaleTimeString();
+        }
+        
+        // Import modal functions
+        function showImportModal() {
+            document.getElementById('importModal').style.display = 'flex';
+        }
+        
+        function hideImportModal() {
+            document.getElementById('importModal').style.display = 'none';
+            document.getElementById('importText').value = '';
+        }
+        
+        // Parse imported playlist data
+        function parseImportedData(text) {
+            const lines = text.split('\n').filter(line => line.trim());
+            const parsedSongs = [];
+            
+            lines.forEach((line, index) => {
+                let name = '', artist = '', duration = '';
+                
+                // CSV format detection
+                if (line.includes(',')) {
+                    const parts = line.split(',').map(s => s.trim().replace(/"/g, ''));
+                    if (parts.length >= 3) {
+                        name = parts[0];
+                        artist = parts[1];
+                        const durationMatch = parts.find(part => /^\d{1,2}:\d{2}(:\d{2})?$/.test(part));
+                        duration = durationMatch || '';
+                    }
+                }
+                // Tab-separated or dash-separated format
+                else if (line.includes('\t') || line.includes(' - ')) {
+                    const parts = line.split(/\t| - /).map(s => s.trim());
+                    if (parts.length >= 2) {
+                        name = parts[0];
+                        artist = parts[1];
+                        const durationMatch = parts.find(part => /^\d{1,2}:\d{2}(:\d{2})?$/.test(part));
+                        duration = durationMatch || '';
+                    }
+                }
+                // Simple format: extract duration from anywhere
+                else {
+                    const durationMatch = line.match(/\d{1,2}:\d{2}(:\d{2})?/);
+                    duration = durationMatch ? durationMatch[0] : '';
+                    name = line.replace(/\d{1,2}:\d{2}(:\d{2})?/, '').trim();
+                }
+                
+                if (name || duration) {
+                    parsedSongs.push({
+                        name: name || `Song ${index + 1}`,
+                        artist: artist || 'Unknown Artist',
+                        duration: duration,
+                        selected: true
+                    });
+                }
+            });
+            
+            return parsedSongs;
+        }
+        
+        function handleImport() {
+            const importText = document.getElementById('importText').value.trim();
+            if (importText) {
+                const newSongs = parseImportedData(importText);
+                if (newSongs.length > 0) {
+                    // Clear existing songs
+                    songs = [];
+                    document.getElementById('songList').innerHTML = '';
+                    songIdCounter = 1;
+                    
+                    // Add imported songs
+                    newSongs.forEach(song => {
+                        addSongEntry(song.duration, song.name, song.artist, song.selected);
+                    });
+                    
+                    hideImportModal();
+                    calculateTotalTime();
+                }
+            }
+        }
+        
+        // Spotify integration functions
+        function connectSpotify() {
+            const clientId = document.getElementById('clientId').value.trim();
+            if (!clientId) {
+                showSpotifyError('Please enter your Spotify Client ID');
+                return;
+            }
+            
+            localStorage.setItem('spotify_client_id', clientId);
+            
+            const authUrl = `https://accounts.spotify.com/authorize?` +
+                `client_id=${clientId}&` +
+                `response_type=code&` +
+                `redirect_uri=${encodeURIComponent(REDIRECT_URI)}&` +
+                `scope=${encodeURIComponent(SPOTIFY_SCOPES)}`;
+            
+            window.location.href = authUrl;
+        }
+        
+        async function exchangeCodeForToken(code) {
+            const clientId = localStorage.getItem('spotify_client_id');
+            if (!clientId) {
+                showSpotifyError('Client ID not found. Please reconnect.');
+                return;
+            }
+            
+            try {
+                showSpotifyResult('Note: Full Spotify integration requires a backend server to securely handle authentication. This demo shows the UI structure.');
+                
+                setTimeout(() => {
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                    
+                    document.getElementById('spotifyAuth').style.display = 'none';
+                    document.getElementById('spotifyConnected').style.display = 'block';
+                    
+                    const playlistSelect = document.getElementById('playlistSelect');
+                    playlistSelect.innerHTML = `
+                        <option value="">Select a playlist</option>
+                        <option value="demo1">My Chill Playlist (15 songs)</option>
+                        <option value="demo2">Workout Mix (22 songs)</option>
+                        <option value="demo3">Road Trip Tunes (31 songs)</option>
+                    `;
+                    
+                    showSpotifyResult('Demo mode: Connected to Spotify (simulated)', false);
+                }, 1000);
+                
+            } catch (error) {
+                showSpotifyError('Failed to connect to Spotify: ' + error.message);
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+        }
+        
+        function importPlaylist() {
+            const playlistSelect = document.getElementById('playlistSelect');
+            const playlistId = playlistSelect.value;
+            
+            if (!playlistId) {
+                showSpotifyError('Please select a playlist');
+                return;
+            }
+            
+            const demoPlaylists = {
+                'demo1': [
+                    { name: 'Blinding Lights', artist: 'The Weeknd', duration_ms: 200040 },
+                    { name: 'Watermelon Sugar', artist: 'Harry Styles', duration_ms: 174000 },
+                    { name: 'Levitating', artist: 'Dua Lipa', duration_ms: 203064 },
+                    { name: 'Good 4 U', artist: 'Olivia Rodrigo', duration_ms: 178147 },
+                    { name: 'Stay', artist: 'The Kid LAROI & Justin Bieber', duration_ms: 141806 }
+                ],
+                'demo2': [
+                    { name: 'Thunder', artist: 'Imagine Dragons', duration_ms: 187146 },
+                    { name: 'Stronger', artist: 'Kelly Clarkson', duration_ms: 222400 },
+                    { name: 'Can\'t Stop the Feeling!', artist: 'Justin Timberlake', duration_ms: 236000 }
+                ],
+                'demo3': [
+                    { name: 'Life is a Highway', artist: 'Tom Cochrane', duration_ms: 275000 },
+                    { name: 'Don\'t Stop Me Now', artist: 'Queen', duration_ms: 209000 },
+                    { name: 'Mr. Blue Sky', artist: 'Electric Light Orchestra', duration_ms: 303000 },
+                    { name: 'Sweet Caroline', artist: 'Neil Diamond', duration_ms: 201000 }
+                ]
+            };
+            
+            try {
+                // Clear existing songs
+                songs = [];
+                document.getElementById('songList').innerHTML = '';
+                songIdCounter = 1;
+                
+                const tracks = demoPlaylists[playlistId] || [];
+                
+                tracks.forEach(track => {
+                    const durationMs = track.duration_ms;
+                    const minutes = Math.floor(durationMs / 60000);
+                    const seconds = Math.floor((durationMs % 60000) / 1000);
+                    const formattedDuration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                    
+                    addSongEntry(formattedDuration, track.name, track.artist, true);
+                });
+                
+                calculateTotalTime();
+                
+                const playlistName = playlistSelect.options[playlistSelect.selectedIndex].text;
+                showSpotifyResult(`Successfully imported ${tracks.length} songs from "${playlistName}"`, false);
+                
+            } catch (error) {
+                showSpotifyError('Failed to import playlist: ' + error.message);
+            }
+        }
+        
+        function disconnectSpotify() {
+            spotifyAccessToken = null;
+            spotifyPlaylists = [];
+            localStorage.removeItem('spotify_client_id');
+            
+            document.getElementById('spotifyAuth').style.display = 'block';
+            document.getElementById('spotifyConnected').style.display = 'none';
+            document.getElementById('spotifyResult').style.display = 'none';
+            document.getElementById('clientId').value = '';
+        }
+        
+        function showSpotifyError(message) {
+            const result = document.getElementById('spotifyResult');
+            result.innerHTML = `
+                <div class="flex items-center gap-2 text-red-600">
+                    <i data-lucide="alert-circle" size="16"></i>
+                    <span>${message}</span>
+                </div>
+            `;
+            result.className = 'bg-red-50 text-red-800 border border-red-200 p-3 rounded-md';
+            result.style.display = 'block';
+            lucide.createIcons();
+        }
+        
+        function showSpotifyResult(message, isError = false) {
+            const result = document.getElementById('spotifyResult');
+            const iconName = isError ? 'alert-circle' : 'check-circle';
+            const colorClass = isError ? 'text-red-600' : 'text-green-600';
+            const bgClass = isError ? 'bg-red-50 text-red-800 border-red-200' : 'bg-green-50 text-green-800 border-green-200';
+            
+            result.innerHTML = `
+                <div class="flex items-center gap-2 ${colorClass}">
+                    <i data-lucide="${iconName}" size="16"></i>
+                    <span>${message}</span>
+                </div>
+            `;
+            result.className = `${bgClass} border p-3 rounded-md`;
+            result.style.display = 'block';
+            lucide.createIcons();
+        }
+    </script>
+</body>
+</html>

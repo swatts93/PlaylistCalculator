@@ -1,0 +1,177 @@
+{% comment %}
+  contact-form.liquid
+  Renders the contact form with honeypot, time-gate, and JS-gated submit
+  for bot and autofiller protection.
+
+  Accepts:
+    - settings: {object} block.settings
+    - submit_button: {string} rendered submit button markup
+{% endcomment %}
+
+{%- liquid
+  assign width_style = ''
+  if settings.width == 'custom'
+    assign width_style = 'width:' | append: settings.custom_width | append: '%;'
+  endif
+  assign width_mobile_style = ''
+  if settings.width_mobile == 'custom'
+    assign width_mobile_style = '--width-mobile:' | append: settings.custom_width_mobile | append: '%;'
+  endif
+
+  assign padding_style = ''
+  assign padding_style = padding_style | append: 'padding-block-start:' | append: settings['padding-block-start'] | append: 'px;'
+  assign padding_style = padding_style | append: 'padding-block-end:'   | append: settings['padding-block-end']   | append: 'px;'
+  assign padding_style = padding_style | append: 'padding-inline-start:'| append: settings['padding-inline-start']| append: 'px;'
+  assign padding_style = padding_style | append: 'padding-inline-end:'  | append: settings['padding-inline-end']  | append: 'px;'
+
+  assign color_class = ''
+  unless settings.inherit_color_scheme
+    assign color_class = settings.color_scheme
+  endunless
+-%}
+
+<div
+  class="contact-form-wrapper {{ color_class }}"
+  style="{{ width_style }} {{ width_mobile_style }} {{ padding_style }}"
+>
+  {%- form 'contact', id: 'contact-form', novalidate: 'novalidate', data-bot-protected: 'true' -%}
+
+    {%- if form.errors -%}
+      <div class="form-errors" role="alert">
+        {{ form.errors | default_errors }}
+      </div>
+    {%- endif -%}
+
+    {%- if form.posted_successfully? -%}
+      <p class="form-success" role="status">
+        {{ 'contact.form.post_success' | t }}
+      </p>
+    {%- else -%}
+
+      {{- submit_button -}}
+
+      {%- comment -%} ── Honeypot: hidden field bots fill, humans leave blank ── {%- endcomment -%}
+      <div aria-hidden="true" style="position:absolute;left:-9999px;top:-9999px;height:0;overflow:hidden;" tabindex="-1">
+        <label for="contact_url">Website</label>
+        <input
+          type="text"
+          id="contact_url"
+          name="contact[url]"
+          autocomplete="off"
+          tabindex="-1"
+          value=""
+        >
+      </div>
+
+      {%- comment -%} ── Time token: JS stamps a Unix timestamp; server/JS checks minimum elapsed time ── {%- endcomment -%}
+      <input type="hidden" id="contact_loaded_at" name="contact[loaded_at]" value="">
+
+      <div class="contact-form__fields">
+        <div class="contact-form__field">
+          <label for="contact_name">{{ 'contact.form.name' | t }}</label>
+          <input
+            type="text"
+            id="contact_name"
+            name="contact[name]"
+            autocomplete="name"
+            required
+            value="{{ form.name }}"
+          >
+        </div>
+
+        <div class="contact-form__field">
+          <label for="contact_email">{{ 'contact.form.email' | t }}</label>
+          <input
+            type="email"
+            id="contact_email"
+            name="contact[email]"
+            autocomplete="email"
+            required
+            value="{{ form.email }}"
+          >
+        </div>
+
+        <div class="contact-form__field">
+          <label for="contact_message">{{ 'contact.form.message' | t }}</label>
+          <textarea
+            id="contact_message"
+            name="contact[body]"
+            required
+            rows="5"
+          >{{ form.body }}</textarea>
+        </div>
+      </div>
+
+    {%- endif -%}
+  {%- endform -%}
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var form = document.getElementById('contact-form');
+  if (!form) return;
+
+  var submitBtn    = form.querySelector('[type="submit"]');
+  var honeypot     = document.getElementById('contact_url');
+  var loadedAtInput= document.getElementById('contact_loaded_at');
+  var MIN_MS       = 3000; // minimum milliseconds a human needs to fill out the form
+
+  // ── 1. Stamp load time ──────────────────────────────────────────────────────
+  var loadedAt = Date.now();
+  if (loadedAtInput) loadedAtInput.value = loadedAt;
+
+  // ── 2. Re-enable submit (it starts disabled via noscript fallback) ──────────
+  if (submitBtn) {
+    submitBtn.removeAttribute('disabled');
+    submitBtn.removeAttribute('aria-disabled');
+  }
+
+  // ── 3. Validate on submit ───────────────────────────────────────────────────
+  form.addEventListener('submit', function (e) {
+    var blocked = false;
+    var reason  = '';
+
+    // Honeypot: bots fill this field, humans never see it
+    if (honeypot && honeypot.value.trim() !== '') {
+      blocked = true;
+      reason  = 'honeypot';
+    }
+
+    // Time gate: reject submissions that arrive impossibly fast
+    if (!blocked && (Date.now() - loadedAt) < MIN_MS) {
+      blocked = true;
+      reason  = 'too-fast';
+    }
+
+    if (blocked) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      // Silent fail — bots get no useful feedback; humans won't trigger this
+      if (reason === 'too-fast') {
+        // Give a human a polite nudge if they somehow submit instantly
+        var msg = document.createElement('p');
+        msg.className = 'form-errors';
+        msg.setAttribute('role', 'alert');
+        msg.textContent = 'Please take a moment to review your message before submitting.';
+        form.insertBefore(msg, form.firstChild);
+        // Re-enable submission after the minimum time has passed
+        setTimeout(function () {
+          msg.remove();
+        }, MIN_MS);
+      }
+    }
+  });
+})();
+</script>
+
+{%- comment -%}
+  Noscript fallback: keep submit disabled so JS-less bots can't POST.
+  Real browsers with JS will re-enable it above.
+{%- endcomment -%}
+<noscript>
+  <style>
+    #contact-form [type="submit"] { pointer-events: none; opacity: 0.5; }
+  </style>
+</noscript>
